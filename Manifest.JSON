@@ -1,0 +1,22 @@
+{
+  "name": "MyTunes",
+  "short_name": "MyTunes",
+  "description": "Your personal YouTube playlist app",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://via.placeholder.com/192x192/1db954/000000?text=M",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://via.placeholder.com/512x512/1db954/000000?text=M",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
