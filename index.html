@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Playlist</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f0f0f; color: #f1f1f1; min-height: 100vh; padding: 24px 16px; }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #fff; }
+    #app { display: grid; grid-template-columns: 1fr 320px; gap: 16px; max-width: 960px; margin: 0 auto; }
+    #player-side { display: flex; flex-direction: column; gap: 12px; }
+    #player-frame { width: 100%; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; background: #1a1a1a; border: 1px solid #2a2a2a; display: flex; align-items: center; justify-content: center; color: #666; font-size: 14px; }
+    #player-frame iframe { width: 100%; height: 100%; border: none; display: block; }
+    #now-playing { padding: 12px 16px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; }
+    #now-playing .label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    #now-playing .title { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #controls { display: flex; gap: 8px; }
+    #controls button { flex: 1; padding: 10px; border: 1px solid #2a2a2a; background: #1a1a1a; border-radius: 8px; cursor: pointer; font-size: 13px; color: #f1f1f1; transition: background 0.15s; }
+    #controls button:hover { background: #252525; }
+    #controls button.primary { background: #fff; color: #000; border-color: transparent; font-weight: 500; }
+    #controls button.primary:hover { background: #e0e0e0; }
+    #playlist-side { display: flex; flex-direction: column; gap: 12px; }
+    #add-form { display: flex; flex-direction: column; gap: 8px; padding: 14px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; }
+    #add-form input { width: 100%; padding: 9px 12px; border: 1px solid #2a2a2a; border-radius: 8px; background: #111; color: #f1f1f1; font-size: 13px; outline: none; font-family: inherit; }
+    #add-form input:focus { border-color: #444; }
+    #add-form input::placeholder { color: #555; }
+    #add-form button { padding: 9px; border: none; background: #fff; color: #000; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; font-family: inherit; transition: background 0.15s; }
+    #add-form button:hover { background: #e0e0e0; }
+    #error { font-size: 12px; color: #f87171; display: none; }
+    #playlist-header { display: flex; justify-content: space-between; align-items: center; }
+    #playlist-header span { font-size: 13px; font-weight: 500; }
+    #playlist-header small { font-size: 12px; color: #666; }
+    #playlist { display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow-y: auto; }
+    #playlist::-webkit-scrollbar { width: 4px; }
+    #playlist::-webkit-scrollbar-track { background: transparent; }
+    #playlist::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    .track { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; cursor: pointer; transition: background 0.1s; }
+    .track:hover { background: #222; }
+    .track.active { border-color: #555; }
+    .track-num { font-size: 12px; color: #666; min-width: 18px; text-align: center; }
+    .track-info { flex: 1; min-width: 0; }
+    .track-title { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .track-del { font-size: 13px; color: #555; padding: 2px 6px; border-radius: 4px; border: none; background: none; cursor: pointer; opacity: 0; transition: opacity 0.1s; color: #f1f1f1; }
+    .track:hover .track-del { opacity: 1; }
+    .track-del:hover { color: #f87171; }
+    .empty { text-align: center; padding: 28px; color: #555; font-size: 13px; }
+    @media (max-width: 640px) { #app { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>🎵 My Playlist</h1>
+  <div id="app">
+    <div id="player-side">
+      <div id="player-frame">Add a video to get started</div>
+      <div id="now-playing">
+        <div class="label">Now playing</div>
+        <div class="title" id="np-title">Nothing playing</div>
+      </div>
+      <div id="controls">
+        <button onclick="prevTrack()">&#9664;&#9664; Prev</button>
+        <button class="primary" onclick="togglePlay()" id="play-btn">&#9654; Play</button>
+        <button onclick="nextTrack()">Next &#9654;&#9654;</button>
+      </div>
+    </div>
+    <div id="playlist-side">
+      <div id="add-form">
+        <input id="url-input" type="text" placeholder="Paste YouTube URL..." />
+        <input id="title-input" type="text" placeholder="Title (optional)" />
+        <div id="error">Invalid YouTube URL — make sure it's a valid link.</div>
+        <button onclick="addTrack()">+ Add to playlist</button>
+      </div>
+      <div id="playlist-header">
+        <span>Playlist</span>
+        <small id="count">0 videos</small>
+      </div>
+      <div id="playlist"><div class="empty">Your playlist is empty</div></div>
+    </div>
+  </div>
+
+  <script>
+    let tracks = [];
+    let current = -1;
+    let playing = false;
+
+    function extractId(url) {
+      const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{11})/,
+        /youtube\.com\/shorts\/([A-Za-z0-9_-]{11})/
+      ];
+      for (const p of patterns) {
+        const m = url.match(p);
+        if (m) return m[1];
+      }
+      return null;
+    }
+
+    function addTrack() {
+      const url = document.getElementById('url-input').value.trim();
+      const titleInput = document.getElementById('title-input').value.trim();
+      const err = document.getElementById('error');
+      const id = extractId(url);
+      if (!id) { err.style.display = 'block'; return; }
+      err.style.display = 'none';
+      const title = titleInput || 'Video ' + (tracks.length + 1);
+      tracks.push({ id, title });
+      document.getElementById('url-input').value = '';
+      document.getElementById('title-input').value = '';
+      renderPlaylist();
+      if (tracks.length === 1) loadTrack(0);
+    }
+
+    function renderPlaylist() {
+      const el = document.getElementById('playlist');
+      document.getElementById('count').textContent = tracks.length + ' video' + (tracks.length !== 1 ? 's' : '');
+      if (!tracks.length) { el.innerHTML = '<div class="empty">Your playlist is empty</div>'; return; }
+      el.innerHTML = tracks.map((t, i) => `
+        <div class="track ${i === current ? 'active' : ''}" onclick="loadTrack(${i})">
+          <span class="track-num">${i === current ? '&#9654;' : i + 1}</span>
+          <div class="track-info"><div class="track-title">${t.title}</div></div>
+          <button class="track-del" onclick="event.stopPropagation();removeTrack(${i})">&#10005;</button>
+        </div>
+      `).join('');
+    }
+
+    function removeTrack(i) {
+      tracks.splice(i, 1);
+      if (current === i) { current = -1; clearPlayer(); }
+      else if (current > i) current--;
+      renderPlaylist();
+    }
+
+    function clearPlayer() {
+      document.getElementById('player-frame').textContent = 'Add a video to get started';
+      document.getElementById('np-title').textContent = 'Nothing playing';
+      document.getElementById('play-btn').textContent = '\u25B6 Play';
+      playing = false;
+    }
+
+    function loadTrack(i) {
+      current = i;
+      playing = true;
+      const t = tracks[i];
+      document.getElementById('np-title').textContent = t.title;
+      document.getElementById('play-btn').textContent = '\u23F8 Pause';
+      document.getElementById('player-frame').innerHTML = `<iframe src="https://www.youtube.com/embed/${t.id}?autoplay=1&rel=0" allowfullscreen allow="autoplay"></iframe>`;
+      renderPlaylist();
+    }
+
+    function togglePlay() {
+      if (current === -1 && tracks.length) { loadTrack(0); return; }
+      if (current === -1) return;
+      playing = !playing;
+      document.getElementById('play-btn').textContent = playing ? '\u23F8 Pause' : '\u25B6 Play';
+      const t = tracks[current];
+      document.getElementById('player-frame').innerHTML = `<iframe src="https://www.youtube.com/embed/${t.id}?autoplay=${playing ? 1 : 0}&rel=0" allowfullscreen allow="autoplay"></iframe>`;
+    }
+
+    function prevTrack() {
+      if (!tracks.length) return;
+      loadTrack((current - 1 + tracks.length) % tracks.length);
+    }
+
+    function nextTrack() {
+      if (!tracks.length) return;
+      loadTrack((current + 1) % tracks.length);
+    }
+
+    document.getElementById('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') addTrack(); });
+  </script>
+</body>
+</html>
